@@ -7,19 +7,33 @@
 
 namespace fs = ghc::filesystem;
 
-const std::vector<std::string> CLASS_NAMES = {
-    "person",         "bicycle",    "car",           "motorcycle",    "airplane",     "bus",           "train",
-    "truck",          "boat",       "traffic light", "fire hydrant",  "stop sign",    "parking meter", "bench",
-    "bird",           "cat",        "dog",           "horse",         "sheep",        "cow",           "elephant",
-    "bear",           "zebra",      "giraffe",       "backpack",      "umbrella",     "handbag",       "tie",
-    "suitcase",       "frisbee",    "skis",          "snowboard",     "sports ball",  "kite",          "baseball bat",
-    "baseball glove", "skateboard", "surfboard",     "tennis racket", "bottle",       "wine glass",    "cup",
-    "fork",           "knife",      "spoon",         "bowl",          "banana",       "apple",         "sandwich",
-    "orange",         "broccoli",   "carrot",        "hot dog",       "pizza",        "donut",         "cake",
-    "chair",          "couch",      "potted plant",  "bed",           "dining table", "toilet",        "tv",
-    "laptop",         "mouse",      "remote",        "keyboard",      "cell phone",   "microwave",     "oven",
-    "toaster",        "sink",       "refrigerator",  "book",          "clock",        "vase",          "scissors",
-    "teddy bear",     "hair drier", "toothbrush"};
+struct ClassTable {
+    std::vector<std::string> names;
+    std::vector<std::vector<unsigned int>> colors;
+};
+
+ClassTable load_class_info(const std::string& json_path)
+{
+    std::ifstream ifs(json_path);
+
+    nlohmann::json j;
+    ifs >> j;
+
+    ClassTable table;
+
+    for (auto& item : j)
+    {
+        table.names.push_back(
+            item["name"].get<std::string>()
+        );
+
+        table.colors.push_back(
+            item["color"].get<std::vector<unsigned int>>()
+        );
+    }
+
+    return table;
+}
 
 const std::vector<std::vector<unsigned int>> COLORS = {
     {0, 114, 189},   {217, 83, 25},   {237, 177, 32},  {126, 47, 142},  {119, 172, 48},  {77, 190, 238},
