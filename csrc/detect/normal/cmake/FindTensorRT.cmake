@@ -37,7 +37,7 @@ endforeach()
 
 if(NOT TensorRT_LIBRARY)
     foreach(search ${_TensorRT_SEARCHES})
-        find_library(TensorRT_LIBRARY NAMES nvinfer ${${search}} PATH_SUFFIXES lib)
+        find_library(TensorRT_LIBRARY NAMES nvinfer_10 ${${search}} PATH_SUFFIXES lib)
         if(NOT TensorRT_LIB_DIR)
             get_filename_component(TensorRT_LIB_DIR ${TensorRT_LIBRARY} DIRECTORY)
         endif ()
@@ -93,8 +93,10 @@ if(TensorRT_FOUND)
                 find_file(TensorRT_LIBRARY_DLL
                         NAMES nvinfer.dll
                         PATHS ${${search}}
-                        PATH_SUFFIXES bin
+                        PATH_SUFFIXES lib bin
                 )
+                message(STATUS "TensorRT dll: ${TensorRT_LIBRARY_DLL}")
+                message(STATUS "TensorRT plugin dll: ${TensorRT_nvinfer_plugin_LIBRARY_DLL}")
             endforeach()
 
             set_target_properties(TensorRT::nvinfer PROPERTIES
@@ -118,8 +120,10 @@ if(TensorRT_FOUND)
                 find_file(TensorRT_nvinfer_plugin_LIBRARY_DLL
                         NAMES nvinfer_plugin.dll
                         PATHS ${${search}}
-                        PATH_SUFFIXES bin
+                        PATH_SUFFIXES lib bin
                 )
+                message(STATUS "TensorRT dll: ${TensorRT_LIBRARY_DLL}")
+                message(STATUS "TensorRT plugin dll: ${TensorRT_nvinfer_plugin_LIBRARY_DLL}")
             endforeach()
 
             set_target_properties(TensorRT::nvinfer_plugin PROPERTIES

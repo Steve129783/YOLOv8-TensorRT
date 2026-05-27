@@ -21,6 +21,8 @@ get_filename_component(CUDA_LIB_DIR ${CUDA_LIBRARIES} DIRECTORY)
 print_var(CUDA_LIB_DIR)
 
 # OpenCV
+set(OpenCV_DIR "E:/steve/tools/opencv/opencv/build/x64/vc16/lib")
+
 find_package(OpenCV REQUIRED)
 print_var(OpenCV_LIBS)
 print_var(OpenCV_LIBRARIES)

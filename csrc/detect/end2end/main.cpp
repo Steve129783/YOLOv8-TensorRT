@@ -4,41 +4,45 @@
 #include "opencv2/opencv.hpp"
 #include "yolov8.hpp"
 #include <chrono>
+#include <fstream>
+#include <nlohmann/json.hpp>
 
 namespace fs = ghc::filesystem;
 
-const std::vector<std::string> CLASS_NAMES = {
-    "person",         "bicycle",    "car",           "motorcycle",    "airplane",     "bus",           "train",
-    "truck",          "boat",       "traffic light", "fire hydrant",  "stop sign",    "parking meter", "bench",
-    "bird",           "cat",        "dog",           "horse",         "sheep",        "cow",           "elephant",
-    "bear",           "zebra",      "giraffe",       "backpack",      "umbrella",     "handbag",       "tie",
-    "suitcase",       "frisbee",    "skis",          "snowboard",     "sports ball",  "kite",          "baseball bat",
-    "baseball glove", "skateboard", "surfboard",     "tennis racket", "bottle",       "wine glass",    "cup",
-    "fork",           "knife",      "spoon",         "bowl",          "banana",       "apple",         "sandwich",
-    "orange",         "broccoli",   "carrot",        "hot dog",       "pizza",        "donut",         "cake",
-    "chair",          "couch",      "potted plant",  "bed",           "dining table", "toilet",        "tv",
-    "laptop",         "mouse",      "remote",        "keyboard",      "cell phone",   "microwave",     "oven",
-    "toaster",        "sink",       "refrigerator",  "book",          "clock",        "vase",          "scissors",
-    "teddy bear",     "hair drier", "toothbrush"};
+struct ClassTable {
+    std::vector<std::string> names;
+    std::vector<std::vector<unsigned int>> colors;
+};
 
-const std::vector<std::vector<unsigned int>> COLORS = {
-    {0, 114, 189},   {217, 83, 25},   {237, 177, 32},  {126, 47, 142},  {119, 172, 48},  {77, 190, 238},
-    {162, 20, 47},   {76, 76, 76},    {153, 153, 153}, {255, 0, 0},     {255, 128, 0},   {191, 191, 0},
-    {0, 255, 0},     {0, 0, 255},     {170, 0, 255},   {85, 85, 0},     {85, 170, 0},    {85, 255, 0},
-    {170, 85, 0},    {170, 170, 0},   {170, 255, 0},   {255, 85, 0},    {255, 170, 0},   {255, 255, 0},
-    {0, 85, 128},    {0, 170, 128},   {0, 255, 128},   {85, 0, 128},    {85, 85, 128},   {85, 170, 128},
-    {85, 255, 128},  {170, 0, 128},   {170, 85, 128},  {170, 170, 128}, {170, 255, 128}, {255, 0, 128},
-    {255, 85, 128},  {255, 170, 128}, {255, 255, 128}, {0, 85, 255},    {0, 170, 255},   {0, 255, 255},
-    {85, 0, 255},    {85, 85, 255},   {85, 170, 255},  {85, 255, 255},  {170, 0, 255},   {170, 85, 255},
-    {170, 170, 255}, {170, 255, 255}, {255, 0, 255},   {255, 85, 255},  {255, 170, 255}, {85, 0, 0},
-    {128, 0, 0},     {170, 0, 0},     {212, 0, 0},     {255, 0, 0},     {0, 43, 0},      {0, 85, 0},
-    {0, 128, 0},     {0, 170, 0},     {0, 212, 0},     {0, 255, 0},     {0, 0, 43},      {0, 0, 85},
-    {0, 0, 128},     {0, 0, 170},     {0, 0, 212},     {0, 0, 255},     {0, 0, 0},       {36, 36, 36},
-    {73, 73, 73},    {109, 109, 109}, {146, 146, 146}, {182, 182, 182}, {219, 219, 219}, {0, 114, 189},
-    {80, 183, 189},  {128, 128, 0}};
+ClassTable load_class_info(const std::string& json_path)
+{
+    std::ifstream ifs(json_path);
+
+    nlohmann::json j;
+    ifs >> j;
+
+    ClassTable table;
+
+    for (auto& item : j)
+    {
+        table.names.push_back(
+            item["name"].get<std::string>()
+        );
+
+        table.colors.push_back(
+            item["color"].get<std::vector<unsigned int>>()
+        );
+    }
+
+    return table;
+}
+
 
 int main(int argc, char** argv)
-{
+{   
+    // 使用
+    auto class_table = load_class_info("classes.json");
+
     if (argc != 3) {
         fprintf(stderr, "Usage: %s [engine_path] [image_path/image_dir/video_path]\n", argv[0]);
         return -1;
@@ -87,18 +91,18 @@ int main(int argc, char** argv)
             printf("can not open %s\n", path.c_str());
             return -1;
         }
-        while (cap.read(image)) {
-            objs.clear();
-            yolov8->copy_from_Mat(image, size);
-            auto start = std::chrono::system_clock::now();
-            yolov8->infer();
-            auto end = std::chrono::system_clock::now();
-            yolov8->postprocess(objs);
-            yolov8->draw_objects(image, res, objs, CLASS_NAMES, COLORS);
+        while (cap.read(image)) { //读取帧
+            objs.clear(); // 清空上一帧的检测结果
+            yolov8->copy_from_Mat(image, size); // 输入图像预处理
+            auto start = std::chrono::system_clock::now(); // 前向推理计时开始
+            yolov8->infer(); // 网络前向推理
+            auto end = std::chrono::system_clock::now(); // 前向推理计时结束
+            yolov8->postprocess(objs); // 后处理
+            yolov8->draw_objects(image, res, objs, class_table.names, class_table.colors); // 将结果绘制到输出图像
             auto tc = (double)std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1000.;
-            printf("cost %2.4lf ms\n", tc);
-            cv::imshow("result", res);
-            if (cv::waitKey(10) == 'q') {
+            printf("cost %2.4lf ms\n", tc); // 打印耗时
+            cv::imshow("result", res); // 显示结果
+            if (cv::waitKey(10) == 'q') { // 按键退出循环
                 break;
             }
         }
@@ -112,7 +116,7 @@ int main(int argc, char** argv)
             yolov8->infer();
             auto end = std::chrono::system_clock::now();
             yolov8->postprocess(objs);
-            yolov8->draw_objects(image, res, objs, CLASS_NAMES, COLORS);
+            yolov8->draw_objects(image, res, objs, class_table.names, class_table.colors);
             auto tc = (double)std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1000.;
             printf("cost %2.4lf ms\n", tc);
             cv::imshow("result", res);

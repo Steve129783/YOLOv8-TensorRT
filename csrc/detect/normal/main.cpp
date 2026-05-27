@@ -1,144 +1,490 @@
 //
 // Created by ubuntu on 1/20/23.
 //
-#include "opencv2/opencv.hpp"
+
+#include <opencv2/opencv.hpp>
+
+#include <cuda_runtime.h>
+
 #include "yolov8.hpp"
+
 #include <chrono>
+#include <fstream>
+#include <vector>
+#include <string>
+#include <cstdio>
+#include <cstdlib>
+
+#include <nlohmann/json.hpp>
 
 namespace fs = ghc::filesystem;
 
-struct ClassTable {
+//--------------------------------------------------
+// runtime config
+//--------------------------------------------------
+
+struct TRTDetectConfig
+{
+    std::string engine_path;
+
+    std::string class_json_path;
+
+    std::string input_path;
+
+    int device_id = 0;
+
+    float score_thres = 0.25f;
+
+    float iou_thres = 0.65f;
+};
+
+//--------------------------------------------------
+// class metadata
+//--------------------------------------------------
+
+struct ClassTable
+{
     std::vector<std::string> names;
+
     std::vector<std::vector<unsigned int>> colors;
 };
 
-ClassTable load_class_info(const std::string& json_path)
+//--------------------------------------------------
+// infer config
+//--------------------------------------------------
+
+struct InferConfig
+{
+    float score_thres;
+
+    float iou_thres;
+};
+
+//--------------------------------------------------
+// load class metadata
+//--------------------------------------------------
+
+ClassTable load_class_info(
+    const std::string& json_path
+)
 {
     std::ifstream ifs(json_path);
 
+    if (!ifs.is_open()) {
+
+        fprintf(
+            stderr,
+            "can not open class json: %s\n",
+            json_path.c_str()
+        );
+
+        std::abort();
+    }
+
     nlohmann::json j;
+
     ifs >> j;
+
+    if (!j.is_array()) {
+
+        fprintf(
+            stderr,
+            "class json must be an array\n"
+        );
+
+        std::abort();
+    }
 
     ClassTable table;
 
-    for (auto& item : j)
+    for (const auto& item : j)
     {
-        table.names.push_back(
-            item["name"].get<std::string>()
-        );
+        if (!item.contains("name") ||
+            !item.contains("color")) {
 
-        table.colors.push_back(
-            item["color"].get<std::vector<unsigned int>>()
-        );
+            fprintf(
+                stderr,
+                "each class item must contain name and color\n"
+            );
+
+            std::abort();
+        }
+
+        std::string name =
+            item.at("name").get<std::string>();
+
+        std::vector<unsigned int> color =
+            item.at("color").get<
+            std::vector<unsigned int>
+            >();
+
+        if (color.size() != 3)
+        {
+            fprintf(
+                stderr,
+                "color must have 3 values\n"
+            );
+
+            std::abort();
+        }
+
+        table.names.push_back(name);
+
+        table.colors.push_back(color);
     }
 
     return table;
 }
 
-const std::vector<std::vector<unsigned int>> COLORS = {
-    {0, 114, 189},   {217, 83, 25},   {237, 177, 32},  {126, 47, 142},  {119, 172, 48},  {77, 190, 238},
-    {162, 20, 47},   {76, 76, 76},    {153, 153, 153}, {255, 0, 0},     {255, 128, 0},   {191, 191, 0},
-    {0, 255, 0},     {0, 0, 255},     {170, 0, 255},   {85, 85, 0},     {85, 170, 0},    {85, 255, 0},
-    {170, 85, 0},    {170, 170, 0},   {170, 255, 0},   {255, 85, 0},    {255, 170, 0},   {255, 255, 0},
-    {0, 85, 128},    {0, 170, 128},   {0, 255, 128},   {85, 0, 128},    {85, 85, 128},   {85, 170, 128},
-    {85, 255, 128},  {170, 0, 128},   {170, 85, 128},  {170, 170, 128}, {170, 255, 128}, {255, 0, 128},
-    {255, 85, 128},  {255, 170, 128}, {255, 255, 128}, {0, 85, 255},    {0, 170, 255},   {0, 255, 255},
-    {85, 0, 255},    {85, 85, 255},   {85, 170, 255},  {85, 255, 255},  {170, 0, 255},   {170, 85, 255},
-    {170, 170, 255}, {170, 255, 255}, {255, 0, 255},   {255, 85, 255},  {255, 170, 255}, {85, 0, 0},
-    {128, 0, 0},     {170, 0, 0},     {212, 0, 0},     {255, 0, 0},     {0, 43, 0},      {0, 85, 0},
-    {0, 128, 0},     {0, 170, 0},     {0, 212, 0},     {0, 255, 0},     {0, 0, 43},      {0, 0, 85},
-    {0, 0, 128},     {0, 0, 170},     {0, 0, 212},     {0, 0, 255},     {0, 0, 0},       {36, 36, 36},
-    {73, 73, 73},    {109, 109, 109}, {146, 146, 146}, {182, 182, 182}, {219, 219, 219}, {0, 114, 189},
-    {80, 183, 189},  {128, 128, 0}};
+//--------------------------------------------------
+// main
+//--------------------------------------------------
 
-int main(int argc, char** argv)
+int main(
+    int argc,
+    char** argv
+)
 {
-    if (argc != 3) {
-        fprintf(stderr, "Usage: %s [engine_path] [image_path/image_dir/video_path]\n", argv[0]);
+    //--------------------------------------------------
+    // config
+    //--------------------------------------------------
+
+    TRTDetectConfig trt_config;
+
+    trt_config.engine_path =
+        "E:/steve/resources/dep_models/20260523/best.engine";
+
+    trt_config.class_json_path =
+        "E:/steve/resources/dep_models/20260523/classes.json";
+
+    trt_config.input_path =
+        "E:/steve/resources/dep_models/20260523/test.jpg";
+
+    trt_config.device_id = 0;
+
+    trt_config.score_thres = 0.25f;
+
+    trt_config.iou_thres = 0.65f;
+
+    //--------------------------------------------------
+    // semantic alias
+    //--------------------------------------------------
+
+    const std::string engine_file_path{
+        trt_config.engine_path
+    };
+
+    const fs::path path{
+        trt_config.input_path
+    };
+
+    //--------------------------------------------------
+    // cuda device
+    //--------------------------------------------------
+
+    cudaError_t cuda_status =
+        cudaSetDevice(
+            trt_config.device_id
+        );
+
+    if (cuda_status != cudaSuccess)
+    {
+        fprintf(
+            stderr,
+            "cudaSetDevice failed: %s\n",
+            cudaGetErrorString(cuda_status)
+        );
+
         return -1;
     }
 
-    // cuda:0
-    cudaSetDevice(0);
+    //--------------------------------------------------
+    // load class metadata
+    //--------------------------------------------------
 
-    const std::string engine_file_path{argv[1]};
-    const fs::path    path{argv[2]};
+    ClassTable class_table =
+        load_class_info(
+            trt_config.class_json_path
+        );
+
+    //--------------------------------------------------
+    // input path parse
+    //--------------------------------------------------
 
     std::vector<std::string> imagePathList;
-    bool                     isVideo{false};
 
-    auto yolov8 = new YOLOv8(engine_file_path);
+    bool isVideo{ false };
+
+    //--------------------------------------------------
+    // create runtime
+    //--------------------------------------------------
+
+    auto yolov8 =
+        new YOLOv8(engine_file_path);
+
+    //--------------------------------------------------
+    // runtime semantic metadata
+    //--------------------------------------------------
+
+    yolov8->num_labels_ =
+        static_cast<int>(
+            class_table.names.size()
+            );
+
+    std::cout
+        << "num labels : "
+        << yolov8->num_labels_
+        << std::endl;
+
     yolov8->make_pipe(true);
 
-    if (fs::exists(path)) {
-        std::string suffix = path.extension();
-        if (suffix == ".jpg" || suffix == ".jpeg" || suffix == ".png") {
-            imagePathList.push_back(path);
+    //--------------------------------------------------
+    // parse input
+    //--------------------------------------------------
+
+    if (fs::is_directory(path))
+    {
+        cv::glob(
+            path.string() + "/*.jpg",
+            imagePathList
+        );
+    }
+    else if (fs::exists(path))
+    {
+        std::string suffix =
+            path.extension().string();
+
+        if (suffix == ".jpg" ||
+            suffix == ".jpeg" ||
+            suffix == ".png") {
+
+            imagePathList.push_back(
+                path.string()
+            );
         }
-        else if (suffix == ".mp4" || suffix == ".avi" || suffix == ".m4v" || suffix == ".mpeg" || suffix == ".mov"
-                 || suffix == ".mkv") {
+        else if (
+            suffix == ".mp4" ||
+            suffix == ".avi" ||
+            suffix == ".m4v" ||
+            suffix == ".mpeg" ||
+            suffix == ".mov" ||
+            suffix == ".mkv") {
+
             isVideo = true;
         }
         else {
-            printf("suffix %s is wrong !!!\n", suffix.c_str());
+
+            printf(
+                "suffix %s is wrong !!!\n",
+                suffix.c_str()
+            );
+
+            delete yolov8;
+
             std::abort();
         }
     }
-    else if (fs::is_directory(path)) {
-        cv::glob(path.string() + "/*.jpg", imagePathList);
+    else {
+
+        printf(
+            "input path does not exist: %s\n",
+            path.string().c_str()
+        );
+
+        delete yolov8;
+
+        return -1;
     }
 
-    cv::Mat             res, image;
-    cv::Size            size = cv::Size{640, 640};
-    int      num_labels  = 80;
-    int      topk        = 100;
-    float    score_thres = 0.25f;
-    float    iou_thres   = 0.65f;
+    //--------------------------------------------------
+    // infer config
+    //--------------------------------------------------
+
+    InferConfig config;
+
+    config.score_thres =
+        trt_config.score_thres;
+
+    config.iou_thres =
+        trt_config.iou_thres;
+
+    //--------------------------------------------------
+    // runtime buffer
+    //--------------------------------------------------
+
+    cv::Mat res;
+
+    cv::Mat image;
+
+    cv::Size size =
+        cv::Size{ 640, 640 };
+
+    int topk = 100;
 
     std::vector<Object> objs;
 
-    cv::namedWindow("result", cv::WINDOW_AUTOSIZE);
+    cv::namedWindow(
+        "result",
+        cv::WINDOW_AUTOSIZE
+    );
 
-    if (isVideo) {
-        cv::VideoCapture cap(path);
+    //--------------------------------------------------
+    // video infer
+    //--------------------------------------------------
 
-        if (!cap.isOpened()) {
-            printf("can not open %s\n", path.c_str());
+    if (isVideo)
+    {
+        cv::VideoCapture cap(
+            path.string()
+        );
+
+        if (!cap.isOpened())
+        {
+            printf(
+                "can not open %s\n",
+                path.string().c_str()
+            );
+
+            delete yolov8;
+
             return -1;
         }
-        while (cap.read(image)) {
+
+        while (cap.read(image))
+        {
             objs.clear();
-            yolov8->copy_from_Mat(image, size);
-            auto start = std::chrono::system_clock::now();
+
+            yolov8->copy_from_Mat(
+                image,
+                size
+            );
+
+            auto start =
+                std::chrono::system_clock::now();
+
             yolov8->infer();
-            auto end = std::chrono::system_clock::now();
-            yolov8->postprocess(objs, score_thres, iou_thres, topk, num_labels);
-            yolov8->draw_objects(image, res, objs, CLASS_NAMES, COLORS);
-            auto tc = (double)std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1000.;
-            printf("cost %2.4lf ms\n", tc);
-            cv::imshow("result", res);
-            if (cv::waitKey(10) == 'q') {
+
+            auto end =
+                std::chrono::system_clock::now();
+
+            yolov8->postprocess(
+                objs,
+                config.score_thres,
+                config.iou_thres,
+                topk
+            );
+
+            yolov8->draw_objects(
+                image,
+                res,
+                objs,
+                class_table.names,
+                class_table.colors
+            );
+
+            auto tc =
+                static_cast<double>(
+                    std::chrono::duration_cast<
+                    std::chrono::microseconds
+                    >(end - start).count()
+                    ) / 1000.0;
+
+            printf(
+                "cost %2.4lf ms\n",
+                tc
+            );
+
+            cv::imshow(
+                "result",
+                res
+            );
+
+            if (cv::waitKey(10) == 'q')
+            {
                 break;
             }
         }
     }
-    else {
-        for (auto& p : imagePathList) {
+
+    //--------------------------------------------------
+    // image infer
+    //--------------------------------------------------
+
+    else
+    {
+        for (auto& p : imagePathList)
+        {
             objs.clear();
-            image = cv::imread(p);
-            yolov8->copy_from_Mat(image, size);
-            auto start = std::chrono::system_clock::now();
+
+            image =
+                cv::imread(p);
+
+            if (image.empty())
+            {
+                printf(
+                    "can not read image: %s\n",
+                    p.c_str()
+                );
+
+                continue;
+            }
+
+            yolov8->copy_from_Mat(
+                image,
+                size
+            );
+
+            auto start =
+                std::chrono::system_clock::now();
+
             yolov8->infer();
-            auto end = std::chrono::system_clock::now();
-            yolov8->postprocess(objs, score_thres, iou_thres, topk, num_labels);
-            yolov8->draw_objects(image, res, objs, CLASS_NAMES, COLORS);
-            auto tc = (double)std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1000.;
-            printf("cost %2.4lf ms\n", tc);
-            cv::imshow("result", res);
+
+            auto end =
+                std::chrono::system_clock::now();
+
+            yolov8->postprocess(
+                objs,
+                config.score_thres,
+                config.iou_thres,
+                topk
+            );
+
+            yolov8->draw_objects(
+                image,
+                res,
+                objs,
+                class_table.names,
+                class_table.colors
+            );
+
+            auto tc =
+                static_cast<double>(
+                    std::chrono::duration_cast<
+                    std::chrono::microseconds
+                    >(end - start).count()
+                    ) / 1000.0;
+
+            printf(
+                "cost %2.4lf ms\n",
+                tc
+            );
+
+            cv::imshow(
+                "result",
+                res
+            );
+
             cv::waitKey(0);
         }
     }
+
+    //--------------------------------------------------
+    // release
+    //--------------------------------------------------
+
     cv::destroyAllWindows();
+
     delete yolov8;
+
     return 0;
 }
