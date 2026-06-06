@@ -152,19 +152,19 @@ int main(
     TRTDetectConfig trt_config;
 
     trt_config.engine_path =
-        "E:/steve/resources/dep_models/20260523/best.engine";
+        "E:/steve/resources/dep_models/20260530/best.engine";
 
     trt_config.class_json_path =
-        "E:/steve/resources/dep_models/20260523/classes.json";
+        "E:/steve/resources/dep_models/20260530/classes.json";
 
     trt_config.input_path =
-        "E:/steve/resources/dep_models/20260523/test.jpg";
+        "E:/steve/resources/dep_models/20260530/test.jpg";
 
     trt_config.device_id = 0;
 
-    trt_config.score_thres = 0.25f;
+    trt_config.score_thres = 0.1f;
 
-    trt_config.iou_thres = 0.65f;
+    trt_config.iou_thres = 0.1f;
 
     //--------------------------------------------------
     // semantic alias

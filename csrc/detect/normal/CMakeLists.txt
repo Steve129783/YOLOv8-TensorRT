@@ -68,9 +68,9 @@ print_var(ALL_LIB_DIRS)
 
 add_executable(
         ${PROJECT_NAME}
-        ${CMAKE_CURRENT_SOURCE_DIR}/test.cpp
-#        ${CMAKE_CURRENT_SOURCE_DIR}/include/yolov8.hpp
-#        ${CMAKE_CURRENT_SOURCE_DIR}/include/common.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/yolov8.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/common.hpp
 )
 
 add_library(${PROJECT_NAME}_lib SHARED

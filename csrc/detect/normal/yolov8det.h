@@ -82,6 +82,12 @@ extern "C" {
 
         int class_id;
 
+        uint8_t color_b;
+
+        uint8_t color_g;
+
+        uint8_t color_r;
+
     } YoloBox;
 
     //--------------------------------------------------

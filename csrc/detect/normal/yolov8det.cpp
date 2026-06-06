@@ -75,6 +75,24 @@ YoloHandle yolo_create(
             return nullptr;
         }
 
+        for (const auto& item : j)
+        {
+            detector->class_names_.push_back(
+                item["name"].get<std::string>()
+            );
+
+            auto color =
+                item["color"];
+
+            detector->class_colors_.push_back(
+                cv::Scalar(
+                    color[0].get<int>(),
+                    color[1].get<int>(),
+                    color[2].get<int>()
+                )
+            );
+        }
+
         detector->num_labels_ =
             static_cast<int>(j.size());
 
@@ -238,8 +256,8 @@ int yolo_detect(
                 max_boxes
             );
 
-        for (int i = 0; i < n; ++i) {
-
+        for (int i = 0; i < n; ++i)
+        {
             const det::Object& obj =
                 objs[i];
 
@@ -270,10 +288,53 @@ int yolo_detect(
                     obj.prob
                     );
 
-            out_boxes[i].class_id =
+            //--------------------------------------------------
+            // class id
+            //--------------------------------------------------
+
+            const int cls_id =
                 static_cast<int>(
                     obj.label
                     );
+
+            out_boxes[i].class_id =
+                cls_id;
+
+            //--------------------------------------------------
+            // color
+            //--------------------------------------------------
+
+            if (
+                cls_id >= 0 &&
+                cls_id < static_cast<int>(
+                    detector->class_colors_.size()
+                    )
+                )
+            {
+                const auto& color =
+                    detector->class_colors_[cls_id];
+
+                out_boxes[i].color_b =
+                    static_cast<uint8_t>(
+                        color[0]
+                        );
+
+                out_boxes[i].color_g =
+                    static_cast<uint8_t>(
+                        color[1]
+                        );
+
+                out_boxes[i].color_r =
+                    static_cast<uint8_t>(
+                        color[2]
+                        );
+            }
+            else
+            {
+                out_boxes[i].color_b = 0;
+                out_boxes[i].color_g = 255;
+                out_boxes[i].color_r = 0;
+            }
         }
 
         return n;
