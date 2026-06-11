@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.12)
 
 set(CMAKE_CUDA_ARCHITECTURES 60 61 62 70 72 75 86 89 90)
 
+add_definitions(-DTRT_10)
 
 project(yolov8-cls LANGUAGES CXX CUDA)
 
@@ -21,16 +22,21 @@ get_filename_component(CUDA_LIB_DIR ${CUDA_LIBRARIES} DIRECTORY)
 print_var(CUDA_LIB_DIR)
 
 # OpenCV
+set(OpenCV_DIR "E:/steve/tools/opencv/opencv490/build")
+
 find_package(OpenCV REQUIRED)
 print_var(OpenCV_LIBS)
 print_var(OpenCV_LIBRARIES)
 print_var(OpenCV_INCLUDE_DIRS)
 
 # TensorRT
+set(TensorRT_ROOT "E:/steve/tools/trt_version/TensorRT-10.16.1.11")
 find_package(TensorRT REQUIRED)
 print_var(TensorRT_LIBRARIES)
 print_var(TensorRT_INCLUDE_DIRS)
 print_var(TensorRT_LIB_DIR)
+
+
 if (TensorRT_VERSION_MAJOR GREATER_EQUAL 10)
     message(STATUS "Build with -DTRT_10")
     add_definitions(-DTRT_10)

@@ -23,7 +23,7 @@ get_filename_component(CUDA_LIB_DIR ${CUDA_LIBRARIES} DIRECTORY)
 print_var(CUDA_LIB_DIR)
 
 # OpenCV
-set(OpenCV_DIR "E:/steve/tools/opencv/opencv/build/x64/vc16/lib")
+set(OpenCV_DIR "E:/steve/tools/opencv/opencv490/build")
 find_package(OpenCV REQUIRED)
 print_var(OpenCV_LIBS)
 print_var(OpenCV_LIBRARIES)
@@ -72,7 +72,21 @@ add_executable(
         ${CMAKE_CURRENT_SOURCE_DIR}/include/yolov8.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/common.hpp
 )
-
+add_executable(
+    test
+    ${CMAKE_CURRENT_SOURCE_DIR}/test.cpp
+)
+target_include_directories(
+    test
+    PRIVATE
+    ${ALL_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(
+    test
+    PRIVATE
+    ${OpenCV_LIBRARIES}
+)
 add_library(${PROJECT_NAME}_lib SHARED
         ${CMAKE_CURRENT_SOURCE_DIR}/yolov8det.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/yolov8det.h

@@ -37,7 +37,7 @@ endforeach()
 
 if(NOT TensorRT_LIBRARY)
     foreach(search ${_TensorRT_SEARCHES})
-        find_library(TensorRT_LIBRARY NAMES nvinfer ${${search}} PATH_SUFFIXES lib)
+        find_library(TensorRT_LIBRARY NAMES nvinfer_10 ${${search}} PATH_SUFFIXES lib)
         if(NOT TensorRT_LIB_DIR)
             get_filename_component(TensorRT_LIB_DIR ${TensorRT_LIBRARY} DIRECTORY)
         endif ()
