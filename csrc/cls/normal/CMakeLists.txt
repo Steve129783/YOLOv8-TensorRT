@@ -71,9 +71,21 @@ add_executable(
         ${CMAKE_CURRENT_SOURCE_DIR}/include/yolov8-cls.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/common.hpp
 )
-
+add_library(
+        ${PROJECT_NAME}_lib
+        SHARED
+        ${CMAKE_CURRENT_SOURCE_DIR}/yolov8cls.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/yolov8cls.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/yolov8-cls.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/common.hpp
+)
 target_include_directories(
         ${PROJECT_NAME}
+        PUBLIC
+        ${ALL_INCLUDE_DIRS}
+)
+target_include_directories(
+        ${PROJECT_NAME}_lib
         PUBLIC
         ${ALL_INCLUDE_DIRS}
 )
@@ -83,9 +95,37 @@ target_link_directories(
         PUBLIC
         ${ALL_LIB_DIRS}
 )
-
+target_link_directories(
+        ${PROJECT_NAME}_lib
+        PUBLIC
+        ${ALL_LIB_DIRS}
+)
 target_link_libraries(
         ${PROJECT_NAME}
         PRIVATE
         ${ALL_LIBS}
+)
+target_link_libraries(
+        ${PROJECT_NAME}_lib
+        PRIVATE
+        ${ALL_LIBS}
+)
+#--------------------------------------------------
+# install
+#--------------------------------------------------
+
+install(
+    TARGETS
+        ${PROJECT_NAME}_lib
+
+    RUNTIME DESTINATION bin
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+)
+
+install(
+    FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/yolov8cls.h
+
+    DESTINATION include
 )
