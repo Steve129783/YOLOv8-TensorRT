@@ -3,7 +3,11 @@
 #include <cstdint>
 
 #ifdef _WIN32
+#ifdef YOLO_CLS_EXPORTS
 #define YOLO_CLS_API __declspec(dllexport)
+#else
+#define YOLO_CLS_API __declspec(dllimport)
+#endif
 #else
 #define YOLO_CLS_API
 #endif

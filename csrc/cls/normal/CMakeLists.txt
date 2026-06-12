@@ -79,6 +79,11 @@ add_library(
         ${CMAKE_CURRENT_SOURCE_DIR}/include/yolov8-cls.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/common.hpp
 )
+target_compile_definitions(
+        ${PROJECT_NAME}_lib
+        PRIVATE
+        YOLO_CLS_EXPORTS
+)
 target_include_directories(
         ${PROJECT_NAME}
         PUBLIC

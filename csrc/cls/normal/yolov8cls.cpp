@@ -155,10 +155,12 @@ void yolo_cls_destroy(
 // predict
 //--------------------------------------------------
 
-int yolo_cls_predict(
+YOLO_CLS_API int yolo_cls_predict(
     YoloClsHandle handle,
     const YoloImage* image,
-    YoloClsResult* result
+    YoloClsResult* out_results,
+    int max_results,
+    float score_thres
 )
 {
     //--------------------------------------------------
@@ -167,14 +169,17 @@ int yolo_cls_predict(
 
     if (handle == nullptr ||
         image == nullptr ||
-        result == nullptr) {
+        out_results == nullptr) {
 
         return -1;
     }
 
-    if (image->data == nullptr) {
-
+    if (max_results <= 0) {
         return -2;
+    }
+
+    if (image->data == nullptr) {
+        return -3;
     }
 
     if (image->width <= 0 ||
@@ -182,7 +187,7 @@ int yolo_cls_predict(
         image->stride <= 0 ||
         image->channels <= 0) {
 
-        return -3;
+        return -4;
     }
 
     //--------------------------------------------------
@@ -195,8 +200,7 @@ int yolo_cls_predict(
     //--------------------------------------------------
 
     if (image->channels != 3) {
-
-        return -4;
+        return -5;
     }
 
     auto* ctx =
@@ -206,7 +210,7 @@ int yolo_cls_predict(
         ctx->classifier == nullptr ||
         ctx->class_names.empty()) {
 
-        return -5;
+        return -6;
     }
 
     try {
@@ -229,24 +233,6 @@ int yolo_cls_predict(
 
         std::vector<cls::Object> objs;
 
-        //--------------------------------------------------
-        // real operator order from cls main:
-        //
-        // YoloImage
-        //     ¡ý
-        // cv::Mat HWC BGR uint8
-        //     ¡ý
-        // copy_from_Mat(img)
-        //     ¡ý
-        // use engine input shape
-        //     ¡ý
-        // TensorRT infer()
-        //     ¡ý
-        // postprocess(objs)
-        //     ¡ý
-        // cls::Object[]
-        //--------------------------------------------------
-
         ctx->classifier->copy_from_Mat(
             img
         );
@@ -258,65 +244,91 @@ int yolo_cls_predict(
         );
 
         if (objs.empty()) {
-
             return 0;
         }
+
+        //--------------------------------------------------
+        // sort by probability, high -> low
+        //--------------------------------------------------
+
+        std::sort(
+            objs.begin(),
+            objs.end(),
+            [](const cls::Object& a, const cls::Object& b)
+            {
+                return a.prob > b.prob;
+            }
+        );
 
         //--------------------------------------------------
         // filter + copy to ABI-safe output
         //--------------------------------------------------
 
-const auto& obj =
-    objs[0];
+        int count = 0;
 
-const int cls_id =
-    static_cast<int>(
-        obj.label
-    );
+        for (const auto& obj : objs) {
 
-result->class_id =
-    cls_id;
+            if (count >= max_results) {
+                break;
+            }
 
-result->score =
-    static_cast<float>(
-        obj.prob
-    );
+            const float score =
+                static_cast<float>(obj.prob);
 
-std::memset(
-    result->class_name,
-    0,
-    sizeof(result->class_name)
-);
+            if (score < score_thres) {
+                continue;
+            }
 
-if (cls_id >= 0 &&
-    cls_id < static_cast<int>(
-        ctx->class_names.size()
-    ))
-{
+            const int cls_id =
+                static_cast<int>(obj.label);
+
+            YoloClsResult& dst =
+                out_results[count];
+
+            dst.class_id =
+                cls_id;
+
+            dst.score =
+                score;
+
+            std::memset(
+                dst.class_name,
+                0,
+                sizeof(dst.class_name)
+            );
+
+            if (cls_id >= 0 &&
+                cls_id < static_cast<int>(
+                    ctx->class_names.size()
+                    )) {
+
 #ifdef _WIN32
 
-    strncpy_s(
-        result->class_name,
-        sizeof(result->class_name),
-        ctx->class_names[cls_id].c_str(),
-        sizeof(result->class_name) - 1
-    );
+                strncpy_s(
+                    dst.class_name,
+                    sizeof(dst.class_name),
+                    ctx->class_names[cls_id].c_str(),
+                    sizeof(dst.class_name) - 1
+                );
 
 #else
 
-    std::strncpy(
-        result->class_name,
-        ctx->class_names[cls_id].c_str(),
-        sizeof(result->class_name) - 1
-    );
+                std::strncpy(
+                    dst.class_name,
+                    ctx->class_names[cls_id].c_str(),
+                    sizeof(dst.class_name) - 1
+                );
 
 #endif
-}
+            }
 
-return 1;
+            ++count;
+        }
+
+        return count;
     }
     catch (...) {
 
-        return -6;
+        return -7;
     }
 }
