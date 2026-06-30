@@ -152,13 +152,13 @@ int main(
     TRTDetectConfig trt_config;
 
     trt_config.engine_path =
-        "E:/steve/resources/dep_models/20260530/best.engine";
+        "D:/steve/resources/dep_res/20260530/best.engine";
 
     trt_config.class_json_path =
-        "E:/steve/resources/dep_models/20260530/classes.json";
+        "D:/steve/resources/dep_res/20260530/classes.json";
 
     trt_config.input_path =
-        "E:/steve/resources/dep_models/20260530/test.jpg";
+        "D:/steve/resources/dep_res/20260530/test.jpg";
 
     trt_config.device_id = 0;
 

@@ -1,8 +1,14 @@
-#include <Windows.h>
-
 #include <iostream>
-
+#include <string>
 #include <opencv2/opencv.hpp>
+
+#if defined(_WIN32) || defined(_WIN64)
+#include <windows.h>
+typedef HMODULE DllHandle;
+#else
+#include <dlfcn.h>
+typedef void* DllHandle;
+#endif
 
 #include "yolov8det.h"
 
@@ -23,15 +29,10 @@ typedef void (*DestroyFn)(
 
 typedef int (*DetectFn)(
     YoloHandle handle,
-
     const YoloImage* image,
-
     YoloBox* out_boxes,
-
     int max_boxes,
-
     float score_thres,
-
     float iou_thres
     );
 
@@ -42,15 +43,10 @@ typedef int (*DetectFn)(
 struct TRTDetectConfig
 {
     std::string engine_path;
-
     std::string class_json_path;
-
     std::string input_path;
-
     int device_id = 0;
-
     float score_thres = 0.25f;
-
     float iou_thres = 0.65f;
 };
 
@@ -61,10 +57,22 @@ struct TRTDetectConfig
 int main()
 {
     //--------------------------------------------------
+    // platform detect message
+    //--------------------------------------------------
+
+#if defined(_WIN32) || defined(_WIN64)
+    std::cout << "[INFO] Running on Windows" << std::endl;
+#else
+    std::cout << "[INFO] Running on Linux" << std::endl;
+#endif
+
+    //--------------------------------------------------
     // config
     //--------------------------------------------------
 
     TRTDetectConfig trt_config;
+
+#if defined(_WIN32) || defined(_WIN64)
 
     trt_config.engine_path =
         "E:/steve/resources/dep_models/20260523/best.engine";
@@ -75,25 +83,63 @@ int main()
     trt_config.input_path =
         "E:/steve/resources/dep_models/20260523/test.jpg";
 
-    trt_config.device_id = 0;
+    const char* dll_path =
+        "E:\\steve\\code\\YOLOv8-TensorRT-main\\csrc\\detect\\normal\\out\\build\\Release\\yolov8_lib.dll";
 
-    trt_config.score_thres = 0.25f;
+#else
 
-    trt_config.iou_thres = 0.65f;
+    trt_config.engine_path =
+        "/media/fast/dep_models/20260523/best.engine";
+
+    trt_config.class_json_path =
+        "/media/fast/dep_models/20260523/classes.json";
+
+    trt_config.input_path =
+        "/media/fast/dep_models/20260523/test.jpg";
+
+    const char* dll_path =
+        "./libyolov8_lib.so";
+
+#endif
 
     //--------------------------------------------------
-    // load dll
+    // load dll / so
     //--------------------------------------------------
 
-    HMODULE dll =
+#if defined(_WIN32) || defined(_WIN64)
+
+    DllHandle dll =
         LoadLibraryA(
-            "E:\\steve\\code\\YOLOv8-TensorRT-main\\csrc\\detect\\normal\\out\\build\\Release\\yolov8_lib.dll"
+            dll_path
         );
+
+#else
+
+    DllHandle dll =
+        dlopen(
+            dll_path,
+            RTLD_NOW
+        );
+
+#endif
 
     if (!dll)
     {
         std::cout
-            << "load dll failed\n";
+            << "load dll failed : "
+            << dll_path
+            << std::endl;
+
+#if defined(_WIN32) || defined(_WIN64)
+        std::cout
+            << "Windows error code : "
+            << GetLastError()
+            << std::endl;
+#else
+        std::cerr
+            << dlerror()
+            << std::endl;
+#endif
 
         return -1;
     }
@@ -105,6 +151,8 @@ int main()
     // get version api
     //--------------------------------------------------
 
+#if defined(_WIN32) || defined(_WIN64)
+
     auto version_fn =
         reinterpret_cast<VersionFn>(
             GetProcAddress(
@@ -113,12 +161,28 @@ int main()
             )
             );
 
+#else
+
+    auto version_fn =
+        reinterpret_cast<VersionFn>(
+            dlsym(
+                dll,
+                "yolo_version"
+            )
+            );
+
+#endif
+
     if (!version_fn)
     {
         std::cout
             << "get version fn failed\n";
 
+#if defined(_WIN32) || defined(_WIN64)
         FreeLibrary(dll);
+#else
+        dlclose(dll);
+#endif
 
         return -2;
     }
@@ -132,6 +196,8 @@ int main()
     // get create api
     //--------------------------------------------------
 
+#if defined(_WIN32) || defined(_WIN64)
+
     auto create_fn =
         reinterpret_cast<CreateFn>(
             GetProcAddress(
@@ -140,22 +206,37 @@ int main()
             )
             );
 
+#else
+
+    auto create_fn =
+        reinterpret_cast<CreateFn>(
+            dlsym(
+                dll,
+                "yolo_create"
+            )
+            );
+
+#endif
+
     if (!create_fn)
     {
         std::cout
             << "get create fn failed\n";
 
+#if defined(_WIN32) || defined(_WIN64)
         FreeLibrary(dll);
+#else
+        dlclose(dll);
+#endif
 
         return -3;
     }
 
-    std::cout
-        << "get create fn success\n";
-
     //--------------------------------------------------
     // get destroy api
     //--------------------------------------------------
+
+#if defined(_WIN32) || defined(_WIN64)
 
     auto destroy_fn =
         reinterpret_cast<DestroyFn>(
@@ -165,43 +246,31 @@ int main()
             )
             );
 
+#else
+
+    auto destroy_fn =
+        reinterpret_cast<DestroyFn>(
+            dlsym(
+                dll,
+                "yolo_destroy"
+            )
+            );
+
+#endif
+
     if (!destroy_fn)
     {
         std::cout
             << "get destroy fn failed\n";
 
+#if defined(_WIN32) || defined(_WIN64)
         FreeLibrary(dll);
+#else
+        dlclose(dll);
+#endif
 
         return -4;
     }
-
-    std::cout
-        << "get destroy fn success\n";
-
-    //--------------------------------------------------
-    // get detect api
-    //--------------------------------------------------
-
-    auto detect_fn =
-        reinterpret_cast<DetectFn>(
-            GetProcAddress(
-                dll,
-                "yolo_detect"
-            )
-            );
-
-    if (!detect_fn)
-    {
-        std::cout
-            << "get detect fn failed\n";
-
-        FreeLibrary(dll);
-
-        return -5;
-    }
-
-    std::cout
-        << "get detect fn success\n";
 
     //--------------------------------------------------
     // create runtime
@@ -218,9 +287,13 @@ int main()
         std::cout
             << "create runtime failed\n";
 
+#if defined(_WIN32) || defined(_WIN64)
         FreeLibrary(dll);
+#else
+        dlclose(dll);
+#endif
 
-        return -6;
+        return -5;
     }
 
     std::cout
@@ -238,17 +311,23 @@ int main()
     if (img.empty())
     {
         std::cout
-            << "read image failed\n";
+            << "load image failed : "
+            << trt_config.input_path
+            << std::endl;
 
         destroy_fn(handle);
 
+#if defined(_WIN32) || defined(_WIN64)
         FreeLibrary(dll);
+#else
+        dlclose(dll);
+#endif
 
-        return -7;
+        return -6;
     }
 
     std::cout
-        << "read image success\n";
+        << "image loaded\n";
 
     //--------------------------------------------------
     // build yolo image
@@ -272,29 +351,62 @@ int main()
         img.channels();
 
     //--------------------------------------------------
-    // output buffer
+    // get detect api
+    //--------------------------------------------------
+
+#if defined(_WIN32) || defined(_WIN64)
+
+    auto detect_fn =
+        reinterpret_cast<DetectFn>(
+            GetProcAddress(
+                dll,
+                "yolo_detect"
+            )
+            );
+
+#else
+
+    auto detect_fn =
+        reinterpret_cast<DetectFn>(
+            dlsym(
+                dll,
+                "yolo_detect"
+            )
+            );
+
+#endif
+
+    if (!detect_fn)
+    {
+        std::cout
+            << "get detect fn failed\n";
+
+        destroy_fn(handle);
+
+#if defined(_WIN32) || defined(_WIN64)
+        FreeLibrary(dll);
+#else
+        dlclose(dll);
+#endif
+
+        return -7;
+    }
+
+    //--------------------------------------------------
+    // runtime detect
     //--------------------------------------------------
 
     constexpr int MAX_BOXES = 100;
 
     YoloBox boxes[MAX_BOXES];
 
-    //--------------------------------------------------
-    // detect
-    //--------------------------------------------------
-
     int num_boxes =
         detect_fn(
             handle,
-
             &image,
-
             boxes,
-
             MAX_BOXES,
-
             trt_config.score_thres,
-
             trt_config.iou_thres
         );
 
@@ -307,7 +419,11 @@ int main()
 
         destroy_fn(handle);
 
+#if defined(_WIN32) || defined(_WIN64)
         FreeLibrary(dll);
+#else
+        dlclose(dll);
+#endif
 
         return -8;
     }
@@ -327,7 +443,6 @@ int main()
     for (int i = 0; i < num_boxes; ++i)
     {
         const auto& box =
-
             boxes[i];
 
         std::cout
@@ -366,10 +481,14 @@ int main()
         << "destroy runtime success\n";
 
     //--------------------------------------------------
-    // free dll
+    // free dll / so
     //--------------------------------------------------
 
+#if defined(_WIN32) || defined(_WIN64)
     FreeLibrary(dll);
+#else
+    dlclose(dll);
+#endif
 
     std::cout
         << "free dll success\n";
