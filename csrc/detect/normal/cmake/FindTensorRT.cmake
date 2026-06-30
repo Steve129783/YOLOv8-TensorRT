@@ -35,18 +35,35 @@ foreach(search ${_TensorRT_SEARCHES})
     find_path(TensorRT_INCLUDE_DIR NAMES NvInfer.h ${${search}} PATH_SUFFIXES include)
 endforeach()
 
+if(WIN32)
+    set(_TensorRT_NVINFER_NAMES nvinfer_10 nvinfer)
+    set(_TensorRT_PLUGIN_NAMES nvinfer_plugin_10 nvinfer_plugin)
+else()
+    set(_TensorRT_NVINFER_NAMES nvinfer)
+    set(_TensorRT_PLUGIN_NAMES nvinfer_plugin)
+endif()
+
 if(NOT TensorRT_LIBRARY)
     foreach(search ${_TensorRT_SEARCHES})
-        find_library(TensorRT_LIBRARY NAMES nvinfer_10 ${${search}} PATH_SUFFIXES lib)
-        if(NOT TensorRT_LIB_DIR)
-            get_filename_component(TensorRT_LIB_DIR ${TensorRT_LIBRARY} DIRECTORY)
-        endif ()
+        find_library(TensorRT_LIBRARY
+            NAMES ${_TensorRT_NVINFER_NAMES}
+            ${${search}}
+            PATH_SUFFIXES lib lib64 targets/x86_64-linux-gnu/lib
+        )
     endforeach()
+endif()
+
+if(TensorRT_LIBRARY AND NOT TensorRT_LIBRARY MATCHES "NOTFOUND")
+    get_filename_component(TensorRT_LIB_DIR "${TensorRT_LIBRARY}" DIRECTORY)
 endif()
 
 if(NOT TensorRT_nvinfer_plugin_LIBRARY)
     foreach(search ${_TensorRT_SEARCHES})
-        find_library(TensorRT_nvinfer_plugin_LIBRARY NAMES nvinfer_plugin_10 ${${search}} PATH_SUFFIXES lib)
+        find_library(TensorRT_nvinfer_plugin_LIBRARY
+            NAMES ${_TensorRT_PLUGIN_NAMES}
+            ${${search}}
+            PATH_SUFFIXES lib lib64 targets/x86_64-linux-gnu/lib
+        )
     endforeach()
 endif()
 
